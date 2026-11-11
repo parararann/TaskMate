@@ -5,11 +5,6 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -19,16 +14,29 @@ public class TaskMate extends JFrame {
     private final Color navy = new Color(30, 41, 59);
     private final Color blue = new Color(59, 130, 246);
     private final Color background = new Color(245, 247, 251);
+    private final Color sidebarInactive = new Color(51, 65, 85);
 
-    // Kolom ID disimpan di model untuk operasi database, tetapi disembunyikan dari tabel.
+    private final TaskDAO taskDAO = new TaskDAO();
+
+    private CardLayout cardLayout;
+    private JPanel pagePanel;
+
+    private JButton dashboardButton;
+    private JButton tasksButton;
+
     private JTable taskTable;
     private DefaultTableModel tableModel;
+
     private JLabel totalValue;
     private JLabel todoValue;
     private JLabel progressValue;
     private JLabel doneValue;
+
     private JTextField searchField;
     private JComboBox<String> statusFilter;
+
+    private static final String PAGE_DASHBOARD = "dashboard";
+    private static final String PAGE_TASKS = "tasks";
 
     public TaskMate() {
         setTitle("TaskMate - Manajemen Tugas");
@@ -38,49 +46,56 @@ public class TaskMate extends JFrame {
         setLocationRelativeTo(null);
 
         setLayout(new BorderLayout());
-        add(createSidebar(), BorderLayout.WEST);
-        add(createMainContent(), BorderLayout.CENTER);
 
-        // Ambil data dari MySQL saat aplikasi dibuka.
+        pagePanel = new JPanel();
+        cardLayout = new CardLayout();
+        pagePanel.setLayout(cardLayout);
+        pagePanel.setBackground(background);
+
+        pagePanel.add(createDashboardPage(), PAGE_DASHBOARD);
+        pagePanel.add(createTasksPage(), PAGE_TASKS);
+
+        add(createSidebar(), BorderLayout.WEST);
+        add(pagePanel, BorderLayout.CENTER);
+
         loadTasks();
+        showPage(PAGE_DASHBOARD);
     }
 
     private JPanel createSidebar() {
         JPanel sidebar = new JPanel();
-        sidebar.setPreferredSize(new Dimension(210, 0));
+        sidebar.setPreferredSize(new Dimension(230, 0));
         sidebar.setBackground(navy);
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setBorder(new EmptyBorder(25, 15, 20, 15));
+        sidebar.setBorder(new EmptyBorder(25, 18, 20, 18));
 
-        JLabel logo = new JLabel("  TaskMate");
-        logo.setFont(new Font("SansSerif", Font.BOLD, 24));
+        JLabel logo = new JLabel("TaskMate");
+        logo.setFont(new Font("SansSerif", Font.BOLD, 25));
         logo.setForeground(Color.WHITE);
         logo.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel subtitle = new JLabel("  PERSONAL TASK MANAGER");
-        subtitle.setFont(new Font("SansSerif", Font.PLAIN, 9));
+        JLabel subtitle = new JLabel("PERSONAL TASK MANAGER");
+        subtitle.setFont(new Font("SansSerif", Font.PLAIN, 10));
         subtitle.setForeground(new Color(203, 213, 225));
         subtitle.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         sidebar.add(logo);
-        sidebar.add(Box.createVerticalStrut(5));
+        sidebar.add(Box.createVerticalStrut(7));
         sidebar.add(subtitle);
-        sidebar.add(Box.createVerticalStrut(45));
+        sidebar.add(Box.createVerticalStrut(55));
 
-        JButton dashboardButton = createMenuButton("▦   Dashboard", true);
-        JButton tasksButton = createMenuButton("☷   Daftar Tugas", false);
-        tasksButton.addActionListener(e -> {
-            if (taskTable != null) {
-                taskTable.requestFocusInWindow();
-            }
-        });
+        dashboardButton = createMenuButton("▦   Dashboard");
+        tasksButton = createMenuButton("☷   Daftar Tugas");
+
+        dashboardButton.addActionListener(e -> showPage(PAGE_DASHBOARD));
+        tasksButton.addActionListener(e -> showPage(PAGE_TASKS));
 
         sidebar.add(dashboardButton);
         sidebar.add(Box.createVerticalStrut(10));
         sidebar.add(tasksButton);
         sidebar.add(Box.createVerticalGlue());
 
-        JLabel footer = new JLabel("  TaskMate v1.0");
+        JLabel footer = new JLabel("TaskMate v1.0");
         footer.setForeground(new Color(203, 213, 225));
         footer.setFont(new Font("SansSerif", Font.PLAIN, 11));
         footer.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -89,25 +104,57 @@ public class TaskMate extends JFrame {
         return sidebar;
     }
 
-    private JButton createMenuButton(String title, boolean active) {
+    private JButton createMenuButton(String title) {
         JButton button = new JButton(title);
-        button.setFont(new Font("SansSerif", Font.BOLD, 13));
+        button.setFont(new Font("SansSerif", Font.BOLD, 14));
         button.setForeground(Color.WHITE);
-        button.setBackground(active ? blue : navy);
+        button.setBackground(sidebarInactive);
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
         button.setHorizontalAlignment(SwingConstants.LEFT);
-        button.setMaximumSize(new Dimension(190, 45));
-        button.setPreferredSize(new Dimension(180, 45));
-        button.setBorder(new EmptyBorder(0, 12, 0, 8));
+        button.setMaximumSize(new Dimension(200, 48));
+        button.setPreferredSize(new Dimension(195, 48));
+        button.setBorder(new EmptyBorder(0, 14, 0, 10));
         button.setFocusPainted(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
         return button;
     }
 
-    private JPanel createMainContent() {
-        JPanel main = new JPanel(new BorderLayout(0, 20));
-        main.setBackground(background);
-        main.setBorder(new EmptyBorder(28, 30, 25, 30));
+    private void showPage(String pageName) {
+        cardLayout.show(pagePanel, pageName);
+
+        boolean dashboardActive = PAGE_DASHBOARD.equals(pageName);
+        dashboardButton.setBackground(dashboardActive ? blue : sidebarInactive);
+        tasksButton.setBackground(dashboardActive ? sidebarInactive : blue);
+
+        dashboardButton.setForeground(Color.WHITE);
+        tasksButton.setForeground(Color.WHITE);
+
+        if (PAGE_DASHBOARD.equals(pageName)) {
+            refreshStats();
+        } else {
+            refreshTable();
+        }
+    }
+
+    private void styleButton(JButton button, Color bg, Color fg) {
+        button.setFont(new Font("SansSerif", Font.BOLD, 12));
+        button.setForeground(fg);
+        button.setBackground(bg);
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBorderPainted(false);
+        button.setFocusPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setBorder(new EmptyBorder(10, 15, 10, 15));
+    }
+
+    private JPanel createDashboardPage() {
+        JPanel page = new JPanel(new BorderLayout(0, 25));
+        page.setBackground(background);
+        page.setBorder(new EmptyBorder(30, 32, 28, 32));
 
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
@@ -117,32 +164,36 @@ public class TaskMate extends JFrame {
         heading.setOpaque(false);
 
         JLabel title = new JLabel("Dashboard");
-        title.setFont(new Font("SansSerif", Font.BOLD, 27));
+        title.setFont(new Font("SansSerif", Font.BOLD, 29));
         title.setForeground(navy);
 
         JLabel description = new JLabel(
-                "Kelola dan pantau semua tugasmu di satu tempat."
+                "Ringkasan dan pantau perkembangan seluruh tugasmu."
         );
-        description.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        description.setFont(new Font("SansSerif", Font.PLAIN, 14));
         description.setForeground(new Color(100, 116, 139));
 
         heading.add(title);
-        heading.add(Box.createVerticalStrut(7));
+        heading.add(Box.createVerticalStrut(8));
         heading.add(description);
 
         JButton addButton = new JButton("+ Tambah Tugas");
-        addButton.setFont(new Font("SansSerif", Font.BOLD, 13));
-        addButton.setForeground(Color.WHITE);
-        addButton.setBackground(blue);
-        addButton.setFocusPainted(false);
-        addButton.setBorder(new EmptyBorder(12, 18, 12, 18));
-        addButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        styleButton(addButton, blue, Color.WHITE);
         addButton.addActionListener(e -> showAddTaskDialog());
 
-        header.add(heading, BorderLayout.WEST);
-        header.add(addButton, BorderLayout.EAST);
+        JButton viewTasksButton = new JButton("Lihat Daftar Tugas");
+        styleButton(viewTasksButton, navy, Color.WHITE);
+        viewTasksButton.addActionListener(e -> showPage(PAGE_TASKS));
 
-        JPanel stats = new JPanel(new GridLayout(1, 4, 15, 0));
+        JPanel headerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        headerActions.setOpaque(false);
+        headerActions.add(viewTasksButton);
+        headerActions.add(addButton);
+
+        header.add(heading, BorderLayout.WEST);
+        header.add(headerActions, BorderLayout.EAST);
+
+        JPanel stats = new JPanel(new GridLayout(2, 2, 16, 16));
         stats.setOpaque(false);
 
         totalValue = createStatValue();
@@ -150,8 +201,7 @@ public class TaskMate extends JFrame {
         progressValue = createStatValue();
         doneValue = createStatValue();
 
-        stats.add(createStatCard("Total Tugas", totalValue,
-                new Color(59, 130, 246)));
+        stats.add(createStatCard("Total Tugas", totalValue, blue));
         stats.add(createStatCard("Belum Dikerjakan", todoValue,
                 new Color(245, 158, 11)));
         stats.add(createStatCard("Sedang Dikerjakan", progressValue,
@@ -159,22 +209,81 @@ public class TaskMate extends JFrame {
         stats.add(createStatCard("Selesai", doneValue,
                 new Color(16, 185, 129)));
 
+        JPanel information = new JPanel();
+        information.setLayout(new BoxLayout(information, BoxLayout.Y_AXIS));
+        information.setBackground(Color.WHITE);
+        information.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240)),
+                new EmptyBorder(22, 24, 22, 24)));
+
+        JLabel infoTitle = new JLabel("Selamat datang di TaskMate");
+        infoTitle.setFont(new Font("SansSerif", Font.BOLD, 18));
+        infoTitle.setForeground(navy);
+
+        JLabel infoText = new JLabel(
+                "<html>Gunakan menu <b>Daftar Tugas</b> untuk melihat, mencari, " +
+                "memfilter, mengedit, dan menghapus tugas. " +
+                "Semua perubahan tersimpan ke database melalui Hibernate.</html>"
+        );
+        infoText.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        infoText.setForeground(new Color(71, 85, 105));
+        infoText.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        information.add(infoTitle);
+        information.add(Box.createVerticalStrut(12));
+        information.add(infoText);
+
         JPanel top = new JPanel(new BorderLayout(0, 25));
         top.setOpaque(false);
         top.add(header, BorderLayout.NORTH);
         top.add(stats, BorderLayout.CENTER);
 
+        page.add(top, BorderLayout.NORTH);
+        page.add(information, BorderLayout.CENTER);
+
+        return page;
+    }
+
+    private JPanel createTasksPage() {
+        JPanel page = new JPanel(new BorderLayout(0, 18));
+        page.setBackground(background);
+        page.setBorder(new EmptyBorder(30, 32, 28, 32));
+
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+
+        JPanel heading = new JPanel();
+        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
+        heading.setOpaque(false);
+
+        JLabel title = new JLabel("Daftar Tugas");
+        title.setFont(new Font("SansSerif", Font.BOLD, 29));
+        title.setForeground(navy);
+
+        JLabel description = new JLabel(
+                "Kelola seluruh tugas yang tersimpan di database."
+        );
+        description.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        description.setForeground(new Color(100, 116, 139));
+
+        heading.add(title);
+        heading.add(Box.createVerticalStrut(8));
+        heading.add(description);
+
+        JButton addButton = new JButton("+ Tambah Tugas");
+        styleButton(addButton, blue, Color.WHITE);
+        addButton.addActionListener(e -> showAddTaskDialog());
+
+        header.add(heading, BorderLayout.WEST);
+        header.add(addButton, BorderLayout.EAST);
+
         JPanel taskPanel = new JPanel(new BorderLayout(0, 15));
         taskPanel.setBackground(Color.WHITE);
         taskPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(226, 232, 240)),
-                new EmptyBorder(20, 20, 20, 20)));
+                new EmptyBorder(18, 18, 18, 18)));
 
-        JLabel taskTitle = new JLabel("Daftar Tugas");
-        taskTitle.setFont(new Font("SansSerif", Font.BOLD, 18));
-        taskTitle.setForeground(navy);
-
-        searchField = new JTextField(15);
+        searchField = new JTextField(16);
         searchField.setFont(new Font("SansSerif", Font.PLAIN, 12));
         searchField.setToolTipText("Cari nama tugas");
         searchField.addActionListener(e -> refreshTable());
@@ -188,6 +297,7 @@ public class TaskMate extends JFrame {
         statusFilter.addActionListener(e -> refreshTable());
 
         JButton searchButton = new JButton("Cari");
+        styleButton(searchButton, blue, Color.WHITE);
         searchButton.addActionListener(e -> refreshTable());
 
         JPanel filters = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -198,7 +308,12 @@ public class TaskMate extends JFrame {
 
         JPanel tableHeader = new JPanel(new BorderLayout());
         tableHeader.setOpaque(false);
-        tableHeader.add(taskTitle, BorderLayout.WEST);
+
+        JLabel tableTitle = new JLabel("Seluruh Data Tugas");
+        tableTitle.setFont(new Font("SansSerif", Font.BOLD, 17));
+        tableTitle.setForeground(navy);
+
+        tableHeader.add(tableTitle, BorderLayout.WEST);
         tableHeader.add(filters, BorderLayout.EAST);
 
         tableModel = new DefaultTableModel(
@@ -211,14 +326,17 @@ public class TaskMate extends JFrame {
 
         taskTable = new JTable(tableModel);
         taskTable.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        taskTable.setRowHeight(34);
+        taskTable.setRowHeight(36);
         taskTable.setSelectionBackground(new Color(219, 234, 254));
         taskTable.setSelectionForeground(navy);
+        taskTable.setGridColor(new Color(226, 232, 240));
+        taskTable.setShowGrid(true);
         taskTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         taskTable.getTableHeader().setBackground(new Color(241, 245, 249));
         taskTable.getTableHeader().setForeground(navy);
+        taskTable.getTableHeader().setReorderingAllowed(false);
 
-        // Sembunyikan kolom ID dari tampilan, tetapi tetap simpan di model.
+        // ID tetap ada di model untuk operasi DAO, tetapi tidak ditampilkan.
         taskTable.removeColumn(taskTable.getColumnModel().getColumn(0));
 
         JScrollPane scrollPane = new JScrollPane(taskTable);
@@ -226,10 +344,13 @@ public class TaskMate extends JFrame {
 
         JButton editButton = new JButton("Edit Tugas");
         JButton deleteButton = new JButton("Hapus Tugas");
+        styleButton(editButton, new Color(37, 99, 235), Color.WHITE);
+        styleButton(deleteButton, new Color(220, 38, 38), Color.WHITE);
+
         editButton.addActionListener(e -> editTask());
         deleteButton.addActionListener(e -> deleteTask());
 
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         actions.add(editButton);
         actions.add(deleteButton);
@@ -238,16 +359,15 @@ public class TaskMate extends JFrame {
         taskPanel.add(scrollPane, BorderLayout.CENTER);
         taskPanel.add(actions, BorderLayout.SOUTH);
 
-        main.add(top, BorderLayout.NORTH);
-        main.add(taskPanel, BorderLayout.CENTER);
+        page.add(header, BorderLayout.NORTH);
+        page.add(taskPanel, BorderLayout.CENTER);
 
-        refreshStats();
-        return main;
+        return page;
     }
 
     private JLabel createStatValue() {
         JLabel value = new JLabel("0");
-        value.setFont(new Font("SansSerif", Font.BOLD, 28));
+        value.setFont(new Font("SansSerif", Font.BOLD, 30));
         value.setForeground(navy);
         return value;
     }
@@ -257,50 +377,44 @@ public class TaskMate extends JFrame {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(Color.WHITE);
         card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
-                new EmptyBorder(15, 14, 15, 12)));
+                BorderFactory.createMatteBorder(0, 5, 0, 0, accent),
+                new EmptyBorder(20, 18, 20, 18)));
 
         JLabel label = new JLabel(title);
-        label.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        label.setFont(new Font("SansSerif", Font.PLAIN, 13));
         label.setForeground(new Color(100, 116, 139));
 
         card.add(label);
-        card.add(Box.createVerticalStrut(12));
+        card.add(Box.createVerticalStrut(14));
         card.add(value);
         return card;
     }
 
-    // Membaca semua tugas dari MySQL dan menampilkannya di tabel.
     private void loadTasks() {
-        String sql = "SELECT id, nama_tugas, deskripsi, tenggat, status "
-                + "FROM tasks ORDER BY id ASC";
-
-        try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet result = statement.executeQuery()) {
+        try {
+            List<Task> tasks = taskDAO.tampilkanSemuaTask();
 
             tableModel.setRowCount(0);
             int number = 1;
 
-            while (result.next()) {
+            for (Task task : tasks) {
                 tableModel.addRow(new Object[]{
-                        result.getInt("id"),
-                        number++,
-                        result.getString("nama_tugas"),
-                        result.getString("deskripsi"),
-                        result.getString("tenggat"),
-                        result.getString("status")
+                    task.getId(),
+                    number++,
+                    task.getNamaTugas(),
+                    task.getDeskripsi(),
+                    task.getTenggat(),
+                    task.getStatus()
                 });
             }
 
             refreshStats();
             refreshTable();
 
-        } catch (SQLException e) {
+        } catch (Exception e) {
             JOptionPane.showMessageDialog(
                     this,
-                    "Tidak dapat mengambil data tugas dari database.\n"
-                    + e.getMessage(),
+                    "Tidak dapat mengambil data tugas dari database.\n" + e.getMessage(),
                     "Kesalahan Database",
                     JOptionPane.ERROR_MESSAGE
             );
@@ -336,6 +450,7 @@ public class TaskMate extends JFrame {
 
         if (result == JOptionPane.OK_OPTION) {
             String name = nameField.getText().trim();
+
             if (name.isEmpty()) {
                 JOptionPane.showMessageDialog(
                         this, "Nama tugas wajib diisi.",
@@ -343,30 +458,22 @@ public class TaskMate extends JFrame {
                 return;
             }
 
-            String sql = "INSERT INTO tasks (nama_tugas, deskripsi, tenggat, status) "
-                    + "VALUES (?, ?, ?, ?)";
+            Task task = new Task();
+            task.setNamaTugas(name);
+            task.setDeskripsi(descriptionField.getText().trim());
+            task.setTenggat(deadlineField.getText().trim());
+            task.setStatus((String) statusBox.getSelectedItem());
 
-            try (Connection connection = DatabaseConnection.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(
-                         sql, Statement.RETURN_GENERATED_KEYS)) {
+            taskDAO.tambahTask(task);
+            loadTasks();
 
-                statement.setString(1, name);
-                statement.setString(2, descriptionField.getText().trim());
-                statement.setString(3, deadlineField.getText().trim());
-                statement.setString(4, (String) statusBox.getSelectedItem());
-                statement.executeUpdate();
-
-                loadTasks();
-                JOptionPane.showMessageDialog(this, "Tugas berhasil disimpan.");
-
-            } catch (SQLException e) {
-                showDatabaseError("menyimpan tugas", e);
-            }
+            JOptionPane.showMessageDialog(this, "Tugas berhasil disimpan.");
         }
     }
 
     private void editTask() {
         int viewRow = taskTable.getSelectedRow();
+
         if (viewRow < 0) {
             JOptionPane.showMessageDialog(
                     this, "Pilih tugas yang ingin diedit terlebih dahulu.");
@@ -376,9 +483,12 @@ public class TaskMate extends JFrame {
         int modelRow = taskTable.convertRowIndexToModel(viewRow);
         int taskId = ((Number) tableModel.getValueAt(modelRow, 0)).intValue();
 
-        JTextField name = new JTextField(tableModel.getValueAt(modelRow, 2).toString());
-        JTextField description = new JTextField(tableModel.getValueAt(modelRow, 3).toString());
-        JTextField deadline = new JTextField(tableModel.getValueAt(modelRow, 4).toString());
+        JTextField name = new JTextField(
+                String.valueOf(tableModel.getValueAt(modelRow, 2)));
+        JTextField description = new JTextField(
+                String.valueOf(tableModel.getValueAt(modelRow, 3)));
+        JTextField deadline = new JTextField(
+                String.valueOf(tableModel.getValueAt(modelRow, 4)));
 
         JComboBox<String> status = new JComboBox<>(new String[]{
                 "Belum Dikerjakan",
@@ -406,30 +516,23 @@ public class TaskMate extends JFrame {
                 return;
             }
 
-            String sql = "UPDATE tasks SET nama_tugas = ?, deskripsi = ?, "
-                    + "tenggat = ?, status = ? WHERE id = ?";
+            Task updatedTask = new Task();
+            updatedTask.setId(taskId);
+            updatedTask.setNamaTugas(name.getText().trim());
+            updatedTask.setDeskripsi(description.getText().trim());
+            updatedTask.setTenggat(deadline.getText().trim());
+            updatedTask.setStatus((String) status.getSelectedItem());
 
-            try (Connection connection = DatabaseConnection.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(sql)) {
+            taskDAO.updateTask(updatedTask);
+            loadTasks();
 
-                statement.setString(1, name.getText().trim());
-                statement.setString(2, description.getText().trim());
-                statement.setString(3, deadline.getText().trim());
-                statement.setString(4, (String) status.getSelectedItem());
-                statement.setInt(5, taskId);
-                statement.executeUpdate();
-
-                loadTasks();
-                JOptionPane.showMessageDialog(this, "Tugas berhasil diperbarui.");
-
-            } catch (SQLException e) {
-                showDatabaseError("memperbarui tugas", e);
-            }
+            JOptionPane.showMessageDialog(this, "Tugas berhasil diperbarui.");
         }
     }
 
     private void deleteTask() {
         int viewRow = taskTable.getSelectedRow();
+
         if (viewRow < 0) {
             JOptionPane.showMessageDialog(
                     this, "Pilih tugas yang ingin dihapus terlebih dahulu.");
@@ -438,7 +541,7 @@ public class TaskMate extends JFrame {
 
         int modelRow = taskTable.convertRowIndexToModel(viewRow);
         int taskId = ((Number) tableModel.getValueAt(modelRow, 0)).intValue();
-        String taskName = tableModel.getValueAt(modelRow, 2).toString();
+        String taskName = String.valueOf(tableModel.getValueAt(modelRow, 2));
 
         int confirm = JOptionPane.showConfirmDialog(
                 this,
@@ -448,19 +551,9 @@ public class TaskMate extends JFrame {
         );
 
         if (confirm == JOptionPane.YES_OPTION) {
-            String sql = "DELETE FROM tasks WHERE id = ?";
-
-            try (Connection connection = DatabaseConnection.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(sql)) {
-
-                statement.setInt(1, taskId);
-                statement.executeUpdate();
-                loadTasks();
-                JOptionPane.showMessageDialog(this, "Tugas berhasil dihapus.");
-
-            } catch (SQLException e) {
-                showDatabaseError("menghapus tugas", e);
-            }
+            taskDAO.hapusTask(taskId);
+            loadTasks();
+            JOptionPane.showMessageDialog(this, "Tugas berhasil dihapus.");
         }
     }
 
@@ -479,7 +572,7 @@ public class TaskMate extends JFrame {
 
         List<RowFilter<Object, Object>> filters = new ArrayList<>();
 
-        // Indeks kolom model: ID=0, No.=1, Nama=2, Deskripsi=3, Tenggat=4, Status=5.
+        // Indeks model: ID=0, No.=1, Nama=2, Deskripsi=3, Tenggat=4, Status=5.
         if (!query.isEmpty()) {
             filters.add(RowFilter.regexFilter(
                     "(?i)" + Pattern.quote(query), 2));
@@ -507,6 +600,7 @@ public class TaskMate extends JFrame {
 
         for (int i = 0; i < total; i++) {
             String status = String.valueOf(tableModel.getValueAt(i, 5));
+
             switch (status) {
                 case "Belum Dikerjakan" -> todo++;
                 case "Sedang Dikerjakan" -> progress++;
@@ -519,15 +613,6 @@ public class TaskMate extends JFrame {
         todoValue.setText(String.valueOf(todo));
         progressValue.setText(String.valueOf(progress));
         doneValue.setText(String.valueOf(done));
-    }
-
-    private void showDatabaseError(String action, SQLException e) {
-        JOptionPane.showMessageDialog(
-                this,
-                "Terjadi kesalahan saat " + action + ".\n" + e.getMessage(),
-                "Kesalahan Database",
-                JOptionPane.ERROR_MESSAGE
-        );
     }
 
     public static void main(String[] args) {
