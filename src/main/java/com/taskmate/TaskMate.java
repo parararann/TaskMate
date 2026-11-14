@@ -15,30 +15,24 @@ public class TaskMate extends JFrame {
     private final Color blue = new Color(59, 130, 246);
     private final Color background = new Color(245, 247, 251);
     private final Color sidebarInactive = new Color(51, 65, 85);
-
-    private final TaskDAO taskDAO = new TaskDAO();
-
+    private final TaskDAO taskDAO;
     private CardLayout cardLayout;
     private JPanel pagePanel;
-
     private JButton dashboardButton;
     private JButton tasksButton;
-
     private JTable taskTable;
     private DefaultTableModel tableModel;
-
     private JLabel totalValue;
     private JLabel todoValue;
     private JLabel progressValue;
     private JLabel doneValue;
-
     private JTextField searchField;
     private JComboBox<String> statusFilter;
-
     private static final String PAGE_DASHBOARD = "dashboard";
     private static final String PAGE_TASKS = "tasks";
 
-    public TaskMate() {
+    public TaskMate(TaskDAO taskDAO) {
+        this.taskDAO = taskDAO;
         setTitle("TaskMate - Manajemen Tugas");
         setSize(1100, 700);
         setMinimumSize(new Dimension(900, 600));
@@ -614,17 +608,33 @@ public class TaskMate extends JFrame {
         progressValue.setText(String.valueOf(progress));
         doneValue.setText(String.valueOf(done));
     }
-
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(
-                        UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignored) {
-                // Gunakan tampilan default jika Look and Feel sistem gagal.
-            }
+        try {
+            // Membuat Spring Application Context.
+            org.springframework.context.support.ClassPathXmlApplicationContext context =
+                    new org.springframework.context.support.ClassPathXmlApplicationContext(
+                            "applicationContext.xml"
+                    );
+            // Mengambil TaskDAO yang dikelola Spring.
+            TaskDAO taskDAO = context.getBean(TaskDAO.class);
+            // Menjalankan aplikasi Swing dengan TaskDAO dari Spring.
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    UIManager.setLookAndFeel(
+                            UIManager.getSystemLookAndFeelClassName());
+                } catch (Exception ignored) {
+                    // Gunakan tampilan default jika Look and Feel sistem gagal.
+                }
+                TaskMate app = new TaskMate(taskDAO);
+                app.setVisible(true);
+            });
+            // Menutup Spring Application Context saat JVM berhenti.
+            context.registerShutdownHook();
 
-            new TaskMate().setVisible(true);
-        });
+        } catch (Exception e) {
+            System.err.println("GAGAL MENJALANKAN TASKMATE!");
+            e.printStackTrace();
+            System.exit(1);
+        }
     }
 }

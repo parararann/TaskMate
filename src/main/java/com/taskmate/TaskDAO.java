@@ -1,151 +1,64 @@
 package com.taskmate;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+@Repository
 public class TaskDAO {
-
+    @PersistenceContext
+    private EntityManager entityManager;
     // CREATE
+    @Transactional
     public void tambahTask(Task task) {
-
-        Transaction transaction = null;
-
-        try (Session session = HibernateUtil
-                .getSessionFactory().openSession()) {
-            transaction = session.beginTransaction();
-            session.persist(task);
-            transaction.commit();
-            System.out.println("Tugas berhasil ditambahkan!");
-        } catch (Exception e) {
-            if (transaction != null) {
-                transaction.rollback();
-            }
-            e.printStackTrace();
-        }
+        entityManager.persist(task);
+        System.out.println("Tugas berhasil ditambahkan!");
     }
-
     // READ
+    @Transactional(readOnly = true)
     public List<Task> tampilkanSemuaTask() {
-
-        try (Session session = HibernateUtil
-                .getSessionFactory().openSession()) {
-
-            return session.createQuery(
-                    "FROM Task ORDER BY id ASC",
-                    Task.class
-            ).getResultList();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return List.of();
-        }
+        return entityManager.createQuery(
+                "FROM Task ORDER BY id ASC",
+                Task.class
+        ).getResultList();
     }
-
     // UPDATE SELURUH DATA TUGAS
+    @Transactional
     public void updateTask(Task updatedTask) {
-        Transaction transaction = null;
-        try (Session session = HibernateUtil
-                .getSessionFactory().openSession()) {
-
-            transaction = session.beginTransaction();
-
-            Task task = session.get(
-                    Task.class,
-                    updatedTask.getId()
-            );
-
-            if (task != null) {
-
-                task.setNamaTugas(updatedTask.getNamaTugas());
-                task.setDeskripsi(updatedTask.getDeskripsi());
-                task.setTenggat(updatedTask.getTenggat());
-                task.setStatus(updatedTask.getStatus());
-
-                transaction.commit();
-
-                System.out.println("Tugas berhasil diperbarui!");
-
-            } else {
-
-                transaction.rollback();
-                System.out.println("Tugas tidak ditemukan!");
-            }
-
-        } catch (Exception e) {
-
-            if (transaction != null) {
-                transaction.rollback();
-            }
-
-            e.printStackTrace();
+        Task task = entityManager.find(
+                Task.class,
+                updatedTask.getId()
+        );
+        if (task != null) {
+            task.setNamaTugas(updatedTask.getNamaTugas());
+            task.setDeskripsi(updatedTask.getDeskripsi());
+            task.setTenggat(updatedTask.getTenggat());
+            task.setStatus(updatedTask.getStatus());
+            System.out.println("Tugas berhasil diperbarui!");
+        } else {
+            System.out.println("Tugas tidak ditemukan!");
         }
     }
-
     // UPDATE STATUS
+    @Transactional
     public void ubahStatus(Integer id, String status) {
-
-        Transaction transaction = null;
-
-        try (Session session = HibernateUtil
-                .getSessionFactory().openSession()) {
-
-            transaction = session.beginTransaction();
-
-            Task task = session.get(Task.class, id);
-
-            if (task != null) {
-
-                task.setStatus(status);
-                transaction.commit();
-
-                System.out.println("Status berhasil diubah!");
-
-            } else {
-
-                transaction.rollback();
-                System.out.println("Tugas tidak ditemukan!");
-            }
-
-        } catch (Exception e) {
-
-            if (transaction != null) {
-                transaction.rollback();
-            }
-
-            e.printStackTrace();
+        Task task = entityManager.find(Task.class, id);
+        if (task != null) {
+            task.setStatus(status);
+            System.out.println("Status berhasil diubah!");
+        } else {
+            System.out.println("Tugas tidak ditemukan!");
         }
     }
-
     // DELETE
+    @Transactional
     public void hapusTask(Integer id) {
-
-        Transaction transaction = null;
-
-        try (Session session = HibernateUtil
-                .getSessionFactory().openSession()) {
-
-            transaction = session.beginTransaction();
-
-            Task task = session.get(Task.class, id);
-
-            if (task != null) {
-
-                session.remove(task);
-                transaction.commit();
-
-                System.out.println("Tugas berhasil dihapus!");
-
-            } else {
-
-                transaction.rollback();
-                System.out.println("Tugas tidak ditemukan!");
-            }
-
-        } catch (Exception e) {
-
-            if (transaction != null) {
-                transaction.rollback();
-            }
-
-            e.printStackTrace();
+        Task task = entityManager.find(Task.class, id);
+        if (task != null) {
+            entityManager.remove(task);
+            System.out.println("Tugas berhasil dihapus!");
+        } else {
+            System.out.println("Tugas tidak ditemukan!");
         }
     }
 }
